@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MMDBG — MMD 背景视频生成工具</title>
+<style>
+  :root {
+    --bg: #f4f1ec;
+    --card: #ffffff;
+    --ink: #2b2620;
+    --muted: #6f675c;
+    --accent: #c0392b;
+    --accent-dark: #962d22;
+    --ok: #2e7d32;
+    --warn: #b26a00;
+    --bad: #c0392b;
+    --border: #e2dbcf;
+    --code-bg: #2d2a26;
+    --code-ink: #e8e2d8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+  }
+  header {
+    background: linear-gradient(135deg, #2b2620, #4a3f33);
+    color: #f6f2ea;
+    padding: 28px 32px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  header .logo {
+    width: 52px; height: 52px;
+    background: var(--accent);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800; color: #fff;
+    flex: none;
+  }
+  header .head-text { flex: 1; }
+  header h1 { font-size: 21px; }
+  header p { color: #cfc6b8; font-size: 13px; margin-top: 2px; }
+  .lang-switch {
+    flex: none;
+    display: flex;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 999px;
+    padding: 3px;
+    gap: 3px;
+  }
+  .lang-switch button {
+    border: none;
+    border-radius: 999px;
+    padding: 5px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    background: transparent;
+    color: #cfc6b8;
+    transition: all .15s;
+  }
+  .lang-switch button:hover { color: #f6f2ea; }
+  .lang-switch button.active {
+    background: #f6f2ea;
+    color: #2b2620;
+  }
+
+  .container { max-width: 980px; margin: 0 auto; padding: 24px; }
+
+  /* 步骤条 */
+  .stepper { display: flex; gap: 8px; margin: 20px 0 28px; }
+  .stepper .step {
+    flex: 1;
+    padding: 10px 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+    position: relative;
+  }
+  .stepper .step .num {
+    display: inline-block;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #ddd5c8;
+    color: #fff;
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 22px;
+    margin-right: 6px;
+  }
+  .stepper .step.active { border-color: var(--accent); color: var(--accent-dark); font-weight: 600; }
+  .stepper .step.active .num { background: var(--accent); }
+  .stepper .step.done { border-color: var(--ok); color: var(--ok); }
+  .stepper .step.done .num { background: var(--ok); }
+
+  /* 卡片 */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 26px 30px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+  }
+  .card h2 { font-size: 18px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid var(--border); }
+  .card h3 { font-size: 15px; margin: 16px 0 8px; color: var(--accent-dark); }
+
+  .btn {
+    display: inline-block;
+    padding: 9px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    background: #e8e1d5;
+    color: var(--ink);
+    transition: all 0.15s;
+  }
+  .btn:hover { filter: brightness(0.96); }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.primary:hover { background: var(--accent-dark); }
+  .btn.ok { background: var(--ok); color: #fff; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn.small { padding: 5px 12px; font-size: 13px; }
+
+  .path-row { display: flex; gap: 10px; align-items: center; margin: 10px 0; flex-wrap: wrap; }
+  .path-row input[type=text] {
+    flex: 1;
+    min-width: 220px;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    background: #faf8f4;
+  }
+  .path-row label { font-size: 14px; font-weight: 600; white-space: nowrap; }
+
+  /* 状态徽章 */
+  .badge { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; margin: 4px 4px 4px 0; }
+  .badge.ok { background: #e4f3e6; color: var(--ok); }
+  .badge.warn { background: #fdf0d9; color: var(--warn); }
+  .badge.bad { background: #fde5e5; color: var(--bad); }
+  .badge.info { background: #e6eef8; color: #2f5d8a; }
+
+  .info-box {
+    background: #faf8f4;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin: 12px 0;
+    font-size: 13.5px;
+  }
+  .info-box table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .info-box td, .info-box th { padding: 5px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+  .info-box th { color: var(--muted); font-weight: 600; width: 110px; }
+
+  .alert { padding: 12px 16px; border-radius: 10px; margin: 10px 0; font-size: 14px; }
+  .alert.bad { background: #fde5e5; border: 1px solid #f2b8b8; color: #8c1f1f; }
+  .alert.ok { background: #e4f3e6; border: 1px solid #b5dcba; color: #1f5c25; }
+  .alert.warn { background: #fdf0d9; border: 1px solid #ecd3a0; color: #7a5200; }
+  .alert.info { background: #e3ecfb; border: 1px solid #b9cdf0; color: #1f3f7a; }
+
+  .issue-list { margin: 8px 0 8px 20px; }
+  .issue-list li { margin: 4px 0; font-size: 13.5px; }
+
+  /* 表单 */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 22px; margin: 14px 0; }
+  .form-grid label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
+  .form-grid select, .form-grid input[type=number], .form-grid input[type=text] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    background: #faf8f4;
+  }
+
+  /* 代码预览 */
+  pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 16px 20px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 12px 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .step-panel { display: none; }
+  .step-panel.active { display: block; }
+
+  .footer-actions { display: flex; gap: 12px; justify-content: space-between; align-items: center; margin-top: 18px; }
+  .progress { display: none; margin-top: 12px; }
+  .progress .bar {
+    height: 8px; border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent) 0%, var(--warn) 100%);
+    animation: slide 1s ease-in-out infinite alternate;
+  }
+  @keyframes slide { from { width: 30%; } to { width: 70%; } }
+  .hint { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">MMD</div>
+  <div class="head-text">
+    <h1 data-i18n="MMDBG · MMD 背景视频生成工具|MMDBG · MMD Background Video Tool"></h1>
+    <p data-i18n="v1.0 · 检查 MMD → 检查视频 → 一键修复 → 生成 .avs 脚本，让任何视频成为 MMD 背景|v1.0 · Check MMD → Check video → One-click fix → Generate .avs, make any video an MMD background"></p>
+  </div>
+  <div class="lang-switch" id="lang-switch">
+    <button id="lang-zh" onclick="setLang('zh')" title="中文">中文</button>
+    <button id="lang-en" onclick="setLang('en')" title="English">EN</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="stepper">
+    <div class="step active" id="step-ind-1"><span class="num">1</span><span data-i18n="检查 MMD|Check MMD"></span></div>
+    <div class="step" id="step-ind-2"><span class="num">2</span><span data-i18n="加载视频|Load Video"></span></div>
+    <div class="step" id="step-ind-3"><span class="num">3</span><span data-i18n="编辑选项|Options"></span></div>
+    <div class="step" id="step-ind-4"><span class="num">4</span><span data-i18n="生成 avs|Generate"></span></div>
+  </div>
+
+  <!-- ========== 第 1 步：MMD ========== -->
+  <div class="step-panel active" id="panel-1">
+    <div class="card">
+      <h2 data-i18n="① 选择你的 MMD 程序|① Select your MMD program"></h2>
+      <div class="path-row">
+        <input type="text" id="mmd-path" data-i18n-ph="例如 D:\MikuMikuDance\MikuMikudance.exe|e.g. D:\MikuMikuDance\MikuMikudance.exe">
+        <button class="btn" onclick="pickFile('mmd')" data-i18n="浏览…|Browse…"></button>
+        <button class="btn primary" onclick="checkMmd()" data-i18n="检查|Check"></button>
+        <button class="btn ok" id="btn-save-mmd" onclick="saveMmdPath()" title="保存后下次打开自动填入|Saved path auto-fills next time" data-i18n="💾 保存|💾 Save"></button>
+      </div>
+      <div id="mmd-result"></div>
+      <div id="mmd-save-tip" class="hint" style="display:none"></div>
+      <div class="hint" data-i18n="提示：本工具同时支持 <b>32 位和 64 位 MMD</b>——检测到位数后会自动生成对应版本的 .avs 脚本（64 位需要 runtime\x64 运行时，项目已内置）。点击「💾 保存」后，下次打开工具会自动填入此路径。|Tip: Both <b>32-bit and 64-bit MMD</b> are supported — the .avs script is generated for the detected bitness (64-bit uses the bundled runtime\x64). After clicking “💾 Save”, the path auto-fills next time."></div>
+    </div>
+    <div class="footer-actions">
+      <span></span>
+      <button class="btn primary" id="to-step2" onclick="goStep(2)" disabled data-i18n="下一步：加载视频 →|Next: Load Video →"></button>
+    </div>
+  </div>
+
+  <!-- ========== 第 2 步：视频 ========== -->
+  <div class="step-panel" id="panel-2">
+    <div class="card">
+      <h2 data-i18n="② 选择背景视频|② Select background video"></h2>
+      <div class="path-row">
+        <input type="text" id="video-path" data-i18n-ph="支持 mp4 / mkv / avi / mov …|mp4 / mkv / avi / mov … supported">
+        <button class="btn" onclick="pickFile('video')" data-i18n="浏览…|Browse…"></button>
+        <button class="btn primary" onclick="probeVideo()" data-i18n="检查视频|Check Video"></button>
+      </div>
+      <div id="video-result"></div>
+      <div class="hint" data-i18n="提示：检查会自动识别分辨率、帧率、编码，并标记需要修复的问题（如坏帧率、旋转元数据）。|Tip: the check detects resolution, frame rate, codec and flags issues that need fixing (bad fps, rotation metadata, etc.)."></div>
+    </div>
+    <div class="footer-actions">
+      <button class="btn" onclick="goStep(1)" data-i18n="← 上一步|← Back"></button>
+      <button class="btn primary" id="to-step3" onclick="goStep(3)" disabled data-i18n="下一步：编辑选项 →|Next: Options →"></button>
+    </div>
+  </div>
+
+  <!-- ========== 第 3 步：编辑 ========== -->
+  <div class="step-panel" id="panel-3">
+    <div class="card">
+      <h2 data-i18n="③ 编辑视频选项|③ Video options"></h2>
+
+      <div class="alert warn" id="edit-warn" style="display:none"></div>
+
+      <!-- 视频信息面板 -->
+      <div class="info-box" id="video-info-panel">
+        <b data-i18n="当前视频：|Current video: "></b><span id="info-path" data-i18n="（请先在第 2 步加载视频）|(load a video in step 2 first)"></span>
+        <table style="margin-top:8px">
+          <tr><th data-i18n="时长|Duration"></th><td><b id="info-duration">-</b></td></tr>
+          <tr><th data-i18n="分辨率|Resolution"></th><td id="info-resolution">-</td></tr>
+          <tr><th data-i18n="帧率|Frame rate"></th><td id="info-fps">-</td></tr>
+          <tr><th data-i18n="编码|Codec"></th><td id="info-codec">-</td></tr>
+        </table>
+      </div>
+
+      <h3 data-i18n="帧率修复|Frame-rate fix"></h3>
+      <div class="path-row">
+        <select id="fps-select">
+          <option value="30" selected data-i18n="统一为 30 fps（推荐）|Force 30 fps (recommended)"></option>
+          <option value="24" data-i18n="24 fps|24 fps"></option>
+          <option value="25" data-i18n="25 fps|25 fps"></option>
+          <option value="60" data-i18n="60 fps|60 fps"></option>
+          <option value="keep" data-i18n="保持原始帧率（不修复）|Keep original fps (no fix)"></option>
+        </select>
+        <button class="btn ok" id="btn-fix" onclick="fixVideo()" data-i18n="⚡ 一键修复帧率|⚡ One-click fix"></button>
+      </div>
+      <div id="fix-result"></div>
+
+      <h3 data-i18n="分辨率|Resolution"></h3>
+      <div class="form-grid">
+        <div>
+          <label data-i18n="输出分辨率（FFMS2 缩放）|Output resolution (FFMS2 scale)"></label>
+          <select id="scale-select" onchange="onScaleChange()">
+            <option value="原始" selected data-i18n="保持原始分辨率|Keep original"></option>
+            <option value="1920x1080">1920×1080 (1080p)</option>
+            <option value="1280x720">1280×720 (720p)</option>
+            <option value="854x480">854×480 (480p)</option>
+            <option value="2560x1440">2560×1440 (2K)</option>
+            <option value="3840x2160">3840×2160 (4K)</option>
+          </select>
+        </div>
+        <div>
+          <label data-i18n="循环播放|Loop"></label>
+          <select id="loop-select">
+            <option value="0" selected data-i18n="不循环|No loop"></option>
+            <option value="2" data-i18n="循环 2 次|Loop 2 times"></option>
+            <option value="4" data-i18n="循环 4 次|Loop 4 times"></option>
+            <option value="-1" data-i18n="无限循环|Loop forever"></option>
+          </select>
+        </div>
+        <div>
+          <label data-i18n="截取开始（秒，0 = 从头）|Trim start (sec, 0 = from beginning)"></label>
+          <input type="number" id="trim-start" value="0" min="0" step="1">
+        </div>
+        <div>
+          <label><span data-i18n="截取结束（秒，0 = 到结尾，最长|Trim end (sec, 0 = to end, max"></span> <span id="max-sec-label">-</span> <span data-i18n="秒）|sec)</span>)</label>
+          <input type="number" id="trim-end" value="0" min="0" step="1">
+        </div>
+      </div>
+      <div class="alert warn" id="scale-risk" style="display:none"></div>
+      <div class="hint" data-i18n="提示：帧率修复会生成一个 <b>xxx_fixed.mp4</b>（转码可能需要几秒~几十秒，取决于视频长度）。缩放/循环/截取是写在 avs 脚本里的，不修改原视频。|Tip: the fps fix creates <b>xxx_fixed.mp4</b> (transcoding may take seconds to minutes). Scale / loop / trim are written into the .avs script — the source video is never modified."></div>
+    </div>
+    <div class="footer-actions">
+      <button class="btn" onclick="goStep(2)" data-i18n="← 上一步|← Back"></button>
+      <button class="btn primary" onclick="goStep(4)" data-i18n="下一步：生成 avs →|Next: Generate →"></button>
+    </div>
+  </div>
+
+  <!-- ========== 第 4 步：生成 ========== -->
+  <div class="step-panel" id="panel-4">
+    <div class="card">
+      <h2 data-i18n="④ 生成 avs 脚本|④ Generate .avs script"></h2>
+      <div id="avisynth-check"></div>
+      <div id="runtime-reg" style="margin-top:10px"></div>
+      <h3 data-i18n="脚本预览|Script preview"></h3>
+      <pre id="avs-preview" data-i18n="（请先完成前面的步骤）|(finish the previous steps first)"></pre>
+
+      <h3 data-i18n="输出目录|Output folder"></h3>
+      <div class="path-row">
+        <input type="text" id="avs-outdir" data-i18n-ph="留空 = 保存到视频所在目录|Empty = same folder as the video">
+        <button class="btn" onclick="pickFile('outdir')" data-i18n="浏览…|Browse…"></button>
+        <button class="btn ok" id="btn-save-outdir" onclick="saveOutputDir()" data-i18n="💾 保存|💾 Save"></button>
+      </div>
+      <div class="hint" id="outdir-save-tip" style="display:none"></div>
+      <div class="hint" data-i18n=".avs 默认保存到视频同目录；填写输出目录后，将保存到你指定的位置（.avs 内引用的是视频绝对路径，放到哪里都能用）。点击「💾 保存」后，下次打开工具会自动填入此目录。|By default the .avs is saved next to the video. If an output folder is set, it is saved there instead (the .avs references the video by absolute path, so it works from anywhere). After clicking “💾 Save”, the folder auto-fills next time."></div>
+
+      <div class="path-row" style="margin-top:14px">
+        <button class="btn primary" onclick="generateAvs()" data-i18n="💾 生成并保存 .avs|💾 Generate &amp; save .avs"></button>
+      </div>
+      <div id="gen-result"></div>
+
+      <h3 data-i18n="使用说明|How to use"></h3>
+      <div class="info-box">
+        <ol style="margin-left:20px">
+          <li data-i18n="打开 MMD，点击顶部菜单 <b>Background</b>（背景）|Open MMD, click the top menu <b>Background</b>"></li>
+          <li data-i18n="选择 <b>Load background avi file</b>（背景 AVI 的读取）|Choose <b>Load background avi file</b>"></li>
+          <li data-i18n="文件类型下拉选 <b>All Files (*.*)</b>（不选看不到 .avs）|Set file type to <b>All Files (*.*)</b> (otherwise .avs is hidden)"></li>
+          <li data-i18n="选中刚才生成的 .avs 文件 → 打开|Select the generated .avs file → Open"></li>
+          <li data-i18n="首次加载会慢几秒（FFMS2 正在生成 .ffindex 索引），之后秒开|The first load takes a few seconds (FFMS2 builds the .ffindex); after that it opens instantly"></li>
+        </ol>
+      </div>
+    </div>
+    <div class="footer-actions">
+      <button class="btn" onclick="goStep(3)" data-i18n="← 上一步|← Back"></button>
+      <button class="btn ok" onclick="restartTool()" data-i18n="🔄 重新开始|🔄 Restart"></button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ---------- 全局状态 ----------
+let mmdInfo = null
+let videoInfo = null
+let activeVideoPath = null   // 实际用于 avs 的视频（修复后指向 _fixed.mp4）
+
+// ---------- 中英文切换 ----------
+// data-i18n="中文|English"（可含 HTML）；data-i18n-ph 用于 input 的 placeholder
+let LANG = localStorage.getItem('mmdbg-lang') || 'zh'
+function tt(s) { // 动态文本双语：'中文|English'
+  const parts = String(s).split('|')
+  return parts[LANG === 'en' ? 1 : 0] || parts[0]
+}
+function applyLang() {
+  document.documentElement.lang = LANG === 'en' ? 'en' : 'zh-CN'
+  document.querySelectorAll('[data-i18n]').forEach((el) => { el.innerHTML = tt(el.dataset.i18n) })
+  document.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.placeholder = tt(el.dataset.i18nPh) })
+  // 双按钮高亮当前语言
+  document.getElementById('lang-zh').classList.toggle('active', LANG === 'zh')
+  document.getElementById('lang-en').classList.toggle('active', LANG === 'en')
+}
+function setLang(l) {
+  if (LANG === l) return
+  LANG = l
+  localStorage.setItem('mmdbg-lang', LANG)
+  applyLang()
+}
+applyLang()
+
+// ---------- 文件选择（调用后端原生 Windows 对话框） ----------
+async function pickFile(kind) {
+  const btn = event.target
+  btn.disabled = true
+  try {
+    // outdir 是前端语义，后端对话框类型为 folder（目录选择器）
+    const r = await api('/api/pick-file', { kind: kind === 'outdir' ? 'folder' : kind })
+    if (!r.ok) { alert(tt('打开文件对话框失败: |Failed to open dialog: ') + (r.error || '')); return }
+    if (r.canceled || !r.path) return // 用户取消
+    if (kind === 'mmd') {
+      document.getElementById('mmd-path').value = r.path
+      checkMmd()
+    } else if (kind === 'outdir') {
+      // 只填入文本框；是否记忆由「💾 保存」决定
+      document.getElementById('avs-outdir').value = r.path
+    } else {
+      document.getElementById('video-path').value = r.path
+      probeVideo()
+    }
+  } finally {
+    btn.disabled = false
+  }
+}
+
+// ---------- 步骤切换 ----------
+function goStep(n) {
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById(`panel-${i}`).classList.toggle('active', i === n)
+    const ind = document.getElementById(`step-ind-${i}`)
+    ind.classList.toggle('active', i === n)
+    if (i < n) ind.classList.add('done')
+    else ind.classList.remove('done')
+  }
+  if (n === 4) {
+    checkAviSynth()
+    updatePreview()
+  }
+}
+
+// ---------- API 封装 ----------
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  return res.json()
+}
+
+// ---------- 保存 / 恢复 MMD 路径 ----------
+async function saveMmdPath() {
+  const p = document.getElementById('mmd-path').value.trim()
+  if (!p) { alert(tt('请先选择 MMD 程序|Select the MMD program first')); return }
+  const r = await api('/api/config', { mmdPath: p })
+  const tip = document.getElementById('mmd-save-tip')
+  if (r.ok) {
+    tip.style.display = 'block'
+    tip.innerHTML = tt('✅ 已保存！下次打开工具会自动填入此路径。|✅ Saved! The path auto-fills next time.')
+  } else {
+    tip.style.display = 'block'
+    tip.innerHTML = tt('⚠️ 保存失败（配置文件写入出错），但本次使用不受影响。|⚠️ Save failed (config write error), but you can keep using the tool.')
+  }
+}
+
+async function restoreConfig() {
+  try {
+    const r = await api('/api/config')
+    if (r.ok && r.config) {
+      if (r.config.mmdPath) {
+        document.getElementById('mmd-path').value = r.config.mmdPath
+        const tip = document.getElementById('mmd-save-tip')
+        tip.style.display = 'block'
+        tip.innerHTML = tt('💡 已自动填入上次保存的 MMD 路径，点击"检查"验证。|💡 Last saved MMD path restored — click "Check" to verify.')
+      }
+      if (r.config.lastVideoPath) {
+        document.getElementById('video-path').value = r.config.lastVideoPath
+      }
+      if (r.config.lastOutputDir) {
+        document.getElementById('avs-outdir').value = r.config.lastOutputDir
+      }
+    }
+  } catch { /* 恢复失败忽略 */ }
+}
+
+// ---------- 保存输出目录（空 = 清除记忆，回到默认视频同目录） ----------
+async function saveOutputDir() {
+  const d = document.getElementById('avs-outdir').value.trim()
+  const r = await api('/api/config', { lastOutputDir: d })
+  const tip = document.getElementById('outdir-save-tip')
+  tip.style.display = 'block'
+  if (r.ok) {
+    tip.innerHTML = d
+      ? tt('✅ 已保存！下次打开工具会自动填入此目录。|✅ Saved! This folder auto-fills next time.')
+      : tt('✅ 已清空！下次将默认保存到视频所在目录。|✅ Cleared! Next time the .avs defaults to the video folder.')
+  } else {
+    tip.innerHTML = tt('⚠️ 保存失败（配置文件写入出错），但本次使用不受影响。|⚠️ Save failed (config write error), but you can keep using the tool.')
+  }
+}
+
+// ---------- 第 1 步：检查 MMD ----------
+async function checkMmd() {
+  const p = document.getElementById('mmd-path').value.trim()
+  if (!p) { alert(tt('请先选择 MMD 程序|Select the MMD program first')); return }
+  const box = document.getElementById('mmd-result')
+  box.innerHTML = '<div class="progress" style="display:block"><div class="bar"></div></div><p>' + tt('正在检查…|Checking…') + '</p>'
+  const r = await api('/api/check-mmd', { path: p })
+  if (!r.ok) {
+    box.innerHTML = `<div class="alert bad">${escapeHtml(r.error)}</div>`
+    document.getElementById('to-step2').disabled = true
+    return
+  }
+  mmdInfo = r
+  let badges = ''
+  badges += `<span class="badge info">${escapeHtml(r.fileName)}</span>`
+  if (r.version) badges += `<span class="badge info">${tt('版本|Version')} ${escapeHtml(r.version)}</span>`
+  const rtOk = r.bitness === 32 ? r.runtime32Ready : (r.bitness === 64 ? r.runtime64Ready : false)
+  badges += `<span class="badge ${rtOk ? 'ok' : 'bad'}">${rtOk ? '✓ ' + r.bitness + tt(' 位|-bit') : '✗ ' + r.bitness + tt(' 位|-bit')}</span>`
+  let alert = ''
+  let canNext = false
+  if (r.bitness === 32 || r.bitness === 64) {
+    if (rtOk) {
+      alert = `<div class="alert ok"><b>✓ ${tt('完美|Perfect')}!</b>${r.bitness}${tt(' 位 MMD 可以直接使用背景视频功能（将生成|-bit MMD can use background video directly (will generate ')}${r.bitness}${tt(' 位版本的 .avs 脚本）。|-bit .avs script).')}</div>`
+      canNext = true
+    } else {
+      alert = `<div class="alert warn"><b>⚠ ${r.bitness}${tt(' 位 MMD，但对应的|-bit MMD, but its ')}${r.bitness}${tt(' 位运行时缺失。|-bit runtime is missing.')}</b><br>` +
+        tt(`请确认项目 <code>runtime${r.bitness === 64 ? '\\x64' : ''}</code> 文件夹完整（含 avisynth.dll 和 plugins\\ffms2.dll）后刷新重试。`,
+           `Make sure the project <code>runtime${r.bitness === 64 ? '\\x64' : ''}</code> folder is complete (avisynth.dll + plugins\\ffms2.dll), then refresh.`) + '</div>'
+    }
+  } else {
+    alert = `<div class="alert bad"><b>✗ ${tt('无法识别的 MMD 架构（|Unrecognized MMD architecture (')}${escapeHtml(r.arch)}）。</b><br>` +
+      tt('请使用 32 位或 64 位（x64）版本的 MMD。', 'Use a 32-bit or 64-bit (x64) build of MMD.') + '</div>'
+  }
+  box.innerHTML = `<div class="info-box"><table><tr><th>${tt('检测结果|Result')}</th><td>${badges}</td></tr></table></div>${alert}`
+  document.getElementById('to-step2').disabled = !canNext
+}
+
+// ---------- 填充第 3 步视频信息面板 ----------
+function fillVideoInfoPanel(r) {
+  if (!r || !r.ok) return
+  const mins = Math.floor(r.duration / 60)
+  const secs = Math.round(r.duration % 60)
+  document.getElementById('info-path').textContent = r.path
+  document.getElementById('info-duration').textContent = LANG === 'en'
+    ? `${mins}m ${secs}s (${r.duration.toFixed(1)}s)`
+    : `${mins} 分 ${secs} 秒（${r.duration.toFixed(1)} 秒）`
+  document.getElementById('info-resolution').textContent = `${r.width} × ${r.height}${r.rotation ? (LANG === 'en' ? ` (${r.rotation}° rotation)` : `（含 ${r.rotation}° 旋转）`) : ''}`
+  document.getElementById('info-fps').textContent = r.fps ? r.fps.toFixed(2) + ' fps' : tt('未知|unknown')
+  document.getElementById('info-codec').textContent = `${escapeHtml(r.format || '?')} · ${escapeHtml(r.codec || '?')}`
+  document.getElementById('max-sec-label').textContent = Math.floor(r.duration)
+  const trimEnd = document.getElementById('trim-end')
+  trimEnd.max = Math.ceil(r.duration)
+  trimEnd.placeholder = LANG === 'en' ? `max ${Math.floor(r.duration)}` : `最长 ${Math.floor(r.duration)}`
+}
+
+// ---------- 第 2 步：检查视频 ----------
+async function probeVideo() {
+  const p = document.getElementById('video-path').value.trim()
+  if (!p) { alert(tt('请先选择视频|Select a video first')); return }
+  const box = document.getElementById('video-result')
+  box.innerHTML = '<div class="progress" style="display:block"><div class="bar"></div></div><p>' + tt('正在分析视频…|Analyzing video…') + '</p>'
+  const r = await api('/api/probe-video', { path: p })
+  if (!r.ok) {
+    box.innerHTML = `<div class="alert bad">${escapeHtml(r.error)}</div>`
+    document.getElementById('to-step3').disabled = true
+    return
+  }
+  videoInfo = r
+  activeVideoPath = r.path
+  fillVideoInfoPanel(r)
+  // 记住视频路径（静默保存，失败不影响）
+  api('/api/config', { lastVideoPath: r.path }).catch(() => {})
+  const mins = Math.floor(r.duration / 60)
+  const secs = Math.round(r.duration % 60)
+  const sizeMB = (r.sizeBytes / 1048576).toFixed(1)
+
+  let rows = ''
+  rows += `<tr><th>${tt('格式|Format')}</th><td>${escapeHtml(r.format || '?')} · ${escapeHtml(r.codec || '?')}</td></tr>`
+  rows += `<tr><th>${tt('分辨率|Resolution')}</th><td>${r.width} × ${r.height}${r.rotation ? (LANG === 'en' ? ` (${r.rotation}° rotation)` : `（含 ${r.rotation}° 旋转）`) : ''}</td></tr>`
+  rows += `<tr><th>${tt('帧率|Frame rate')}</th><td>${r.fps ? r.fps.toFixed(2) + ' fps' : tt('未知|unknown')}${r.r_fps && r.avg_fps && r.r_fps / r.avg_fps > 2 ? (LANG === 'en' ? ` (nominal ${r.r_fps.toFixed(0)}fps, abnormal)` : `（标称 ${r.r_fps.toFixed(0)}fps，异常）`) : ''}</td></tr>`
+  rows += `<tr><th>${tt('时长|Duration')}</th><td>${LANG === 'en' ? `${mins}m ${secs}s` : `${mins} 分 ${secs} 秒`}</td></tr>`
+  rows += `<tr><th>${tt('大小|Size')}</th><td>${sizeMB} MB</td></tr>`
+  rows += `<tr><th>${tt('音频|Audio')}</th><td>${r.hasAudio ? tt('有（生成 avs 时自动忽略）|yes (ignored when generating avs)') : tt('无|no')}</td></tr>`
+  let issuesHtml = ''
+  if (r.issues && r.issues.length) {
+    issuesHtml = `<div class="alert warn"><b>${tt('发现|Found')} ${r.issues.length} ${tt('个问题：|issue(s):')}</b><ul class="issue-list">` +
+      r.issues.map((i) => `<li>${escapeHtml(i)}</li>`).join('') + `</ul></div>`
+  } else {
+    issuesHtml = `<div class="alert ok"><b>✓ ${tt('视频状态良好，无需修复。|Video is fine, no fix needed.')}</b></div>`
+  }
+  box.innerHTML = `<div class="info-box"><table>${rows}</table></div>${issuesHtml}`
+  document.getElementById('to-step3').disabled = false
+  // 同步第 3 步警告
+  const warn = document.getElementById('edit-warn')
+  if (r.issues && r.issues.length) {
+    warn.style.display = 'block'
+    warn.innerHTML = `<b>${tt('建议：|Suggestion: ')}</b>${escapeHtml(r.issues[0])}${tt('。如果生成后仍不显示，请点击"一键修复帧率"。|. If it still does not display after generating, click "One-click fix".')}`
+  } else {
+    warn.style.display = 'none'
+  }
+}
+
+// ---------- 第 3 步：修复帧率 ----------
+async function fixVideo() {
+  if (!videoInfo) { alert(tt('请先检查视频|Check the video first')); return }
+  const fpsSel = document.getElementById('fps-select').value
+  if (fpsSel === 'keep') { alert(tt('已选择保持原始帧率，无需修复|"Keep original fps" selected — no fix needed')); return }
+  const btn = document.getElementById('btn-fix')
+  btn.disabled = true
+  const box = document.getElementById('fix-result')
+  box.innerHTML = '<div class="progress" style="display:block"><div class="bar"></div></div><p>' + tt('正在转码修复（请稍候，大视频可能需要 1~2 分钟）…|Transcoding (please wait, large videos may take 1-2 min)…') + '</p>'
+  const r = await api('/api/transcode', { input: videoInfo.path, fps: Number(fpsSel) })
+  if (!r.ok) {
+    box.innerHTML = `<div class="alert bad">${tt('修复失败：|Fix failed: ')}${escapeHtml(r.error)}</div>`
+    btn.disabled = false
+    return
+  }
+  box.innerHTML = `<div class="alert ok"><b>✓ ${tt('修复完成！|Fix complete!')}</b>${tt('已生成|Generated')} <code>${escapeHtml(r.output)}</code>${tt('，后续将使用这个修复后的视频。|. This fixed video will be used from now on.')}</div>`
+  activeVideoPath = r.output
+  // 更新视频信息
+  videoInfo = await api('/api/probe-video', { path: r.output })
+  if (videoInfo && videoInfo.ok) fillVideoInfoPanel(videoInfo)
+  btn.disabled = false
+}
+
+// ---------- 第 4 步：检查 AviSynth ----------
+let runtimeInfo = null  // check-avisynth 响应，预览脚本时取 ffms2 路径用
+async function checkAviSynth() {
+  const r = await api('/api/check-avisynth')
+  runtimeInfo = r
+  const box = document.getElementById('avisynth-check')
+  const regBox = document.getElementById('runtime-reg')
+  if (r.ready) {
+    const modeLabel = r.mode === 'runtime' ? tt('📦 便携运行时（项目自带，绿色免安装）|📦 Portable runtime (bundled, no install)') : (r.mode === 'system' ? tt('💻 系统已安装版本|💻 System-installed version') : '')
+    // 分别展示 x86 / x64 两臂状态
+    const armLine = (label, arm) => arm && arm.ready
+      ? `<b style="color:var(--ok)">✓ ${label}</b> <span style="opacity:.75;font-size:12.5px">avisynth: <code>${escapeHtml(arm.avisynthPath || '')}</code></span>`
+      : `<b style="color:var(--muted)">✗ ${label} ${arm ? tt('不可用|unavailable') : tt('未安装|not installed')}</b>`
+    box.innerHTML = `<div class="alert ok"><b>✓ ${tt('AviSynth+ / FFMS2 已就绪|AviSynth+ / FFMS2 ready')}</b>（${modeLabel}）<br>` +
+      `<span style="font-size:13px">${armLine(tt('32 位 MMD：|32-bit MMD: '), r.x86)}<br>${armLine(tt('64 位 MMD：|64-bit MMD: '), r.x64)}</span></div>`
+    // 注册状态提示 + 按钮
+    if (r.mode === 'runtime') {
+      if (r.registered) {
+        regBox.innerHTML = `<div class="alert ok" style="padding:8px 14px"><b>✓ ${tt('已注册到当前用户|Registered for current user')}</b>${tt('（32/64 位 MMD 均可直接读取本项目生成的 avs）|(both 32/64-bit MMD can read avs generated by this project)')}</div>`
+      } else {
+        regBox.innerHTML = `<div class="alert warn" style="padding:8px 14px"><b>⚠️ ${tt('还未注册到系统|Not registered yet')}</b> —— ${tt('MMD 读取 .avs 需要注册便携运行时（写入当前用户注册表，无需管理员权限，32/64 位一次注册全部生效）：|MMD needs the portable runtime registered to read .avs (per-user registry, no admin rights, 32/64-bit in one go):')}<br>` +
+          `<button class="btn ok small" style="margin-top:8px" onclick="registerRuntime()">🔧 ${tt('一键注册|Register')}</button>` +
+          `<button class="btn small" style="margin-top:8px;margin-left:6px" onclick="unregisterRuntime()">${tt('卸载注册|Unregister')}</button></div>`
+      }
+    } else {
+      regBox.innerHTML = ''
+    }
+  } else {
+    box.innerHTML = `<div class="alert bad"><b>✗ ${escapeHtml(r.detail)}</b><br>` +
+      tt('请确认项目 <code>runtime</code> 文件夹完整（x86：avisynth.dll + plugins/ffms2.dll；x64：x64\\ 下同），或系统已安装 AviSynth+。',
+         'Make sure the project <code>runtime</code> folder is complete (x86: avisynth.dll + plugins/ffms2.dll; x64: same under x64\\), or that AviSynth+ is installed.') + '</div>'
+    regBox.innerHTML = ''
+  }
+  updatePreview()
+}
+
+async function registerRuntime() {
+  const r = await api('/api/register-runtime')
+  const regBox = document.getElementById('runtime-reg')
+  if (r.ok) {
+    regBox.innerHTML = `<div class="alert ok" style="padding:8px 14px"><b>✓ ${tt('注册成功！|Registered!')}</b>${tt('现在可以在 MMD 中读取 avs 了。|MMD can now read avs files.')}</div>`
+  } else {
+    regBox.innerHTML = `<div class="alert bad" style="padding:8px 14px">${tt('注册失败：|Register failed: ')}${escapeHtml(r.error || '')}</div>`
+  }
+}
+
+async function unregisterRuntime() {
+  const r = await api('/api/unregister-runtime')
+  const regBox = document.getElementById('runtime-reg')
+  if (r.ok) {
+    regBox.innerHTML = `<div class="alert ok" style="padding:8px 14px">✓ ${tt('已卸载注册（不影响系统原有 AviSynth+）。|Unregistered (system AviSynth+ untouched).')}</div>`
+  } else {
+    regBox.innerHTML = `<div class="alert bad" style="padding:8px 14px">${tt('卸载失败：|Unregister failed: ')}${escapeHtml(r.error || '')}</div>`
+  }
+}
+
+// ---------- 分辨率风险提示 ----------
+function onScaleChange() {
+  const scale = document.getElementById('scale-select').value
+  const risk = document.getElementById('scale-risk')
+  const videoW = videoInfo ? videoInfo.width : 0
+  const videoH = videoInfo ? videoInfo.height : 0
+  const targetW = scale === '原始' ? videoW : parseInt(scale.split('x')[0])
+  const targetH = scale === '原始' ? videoH : parseInt(scale.split('x')[1])
+
+  if (scale === '2560x1440' || scale === '3840x2160') {
+    // 高分辨率风险提示（实测验证过的结论）
+    let html = `<b>⚠️ ${tt('高分辨率风险提示：|High-resolution risk:')}</b><ul class="issue-list" style="margin:6px 0 0 18px">`
+    html += `<li><b>${tt('MMD 性能', 'MMD performance')}</b>：${tt('MMD 是 2008 年架构的 DirectX 9 渲染器，4K 背景视频每帧解码+上传显存的负担很大，低端显卡可能掉帧甚至卡死|MMD is a 2008-era DirectX 9 renderer; a 4K background puts a heavy per-frame decode + VRAM upload load on it — weak GPUs may drop frames or hang')}</li>`
+    html += `<li><b>${tt('FFMS2 解码', 'FFMS2 decoding')}</b>：${tt('4K 视频需要更高内存和 CPU 解码，预览/拖动时间轴可能变慢|4K needs more RAM and CPU; preview / timeline scrubbing may slow down')}</li>`
+    html += `<li><b>${tt('放大无意义', 'Upscaling is pointless')}</b>：${tt('如果源视频分辨率低于目标（如 720p 源 → 4K 输出），只是放大模糊，不会更清晰|if the source is smaller than the target (e.g. 720p → 4K) it only gets blurry, never sharper')}</li>`
+    html += `<li><b>${tt('当前源视频', 'Current source')}</b>：${videoW}×${videoH} → ${tt('目标', 'target')} ${targetW}×${targetH}（${targetW > videoW ? tt('放大', 'upscale') : tt('缩小', 'downscale')}）</li>`
+    html += '</ul>'
+    html += `<div style="margin-top:6px">💡 <b>${tt('建议', 'Advice')}</b>：${tt('MMD 背景视频用 <b>1280×720 或 1920×1080</b> 就足够；4K 背景仅在你显卡强劲且源视频本身是 4K 时才值得尝试。', '<b>1280×720 or 1920×1080</b> is plenty for MMD backgrounds; try 4K only with a strong GPU and a true 4K source.')}</div>`
+    risk.innerHTML = html
+    risk.style.display = 'block'
+  } else {
+    risk.style.display = 'none'
+  }
+  updatePreview()
+}
+
+// ---------- 预览 avs ----------
+function updatePreview() {
+  if (!activeVideoPath) return
+  const bitness = mmdInfo ? mmdInfo.bitness : 32
+  // 按 MMD 位数选对应运行时的 ffms2（预览与后端 generateAvs 逻辑一致）
+  let ffms2Path = ''
+  if (runtimeInfo) {
+    const arm = bitness === 64 ? runtimeInfo.x64 : runtimeInfo.x86
+    if (arm && arm.ready) ffms2Path = arm.ffms2Path
+  }
+  const fps = document.getElementById('fps-select').value
+  // keep = 保持原始帧率：必须用视频的实际帧率（否则 trim 帧号换算会错位，60fps 视频会差一倍）
+  const fpsNum = fps === 'keep' ? (videoInfo ? Math.round(videoInfo.fps) : 30) : Number(fps)
+  const scale = document.getElementById('scale-select').value
+  const loop = Number(document.getElementById('loop-select').value)
+  const trimStart = Number(document.getElementById('trim-start').value || 0)
+  const trimEnd = Number(document.getElementById('trim-end').value || 0)
+  const lines = []
+  lines.push(`# MMD 背景视频脚本 —— 由 MMDBG 工具生成（${bitness} 位 MMD）`)
+  if (ffms2Path) lines.push(`LoadPlugin("${ffms2Path.replace(/\\/g, '\\\\')}")`)
+  lines.push(`FFVideoSource("${activeVideoPath.replace(/\\/g, '/')}", fpsnum=${fpsNum}, fpsden=1)`)
+  if (trimEnd > trimStart) lines.push(`Trim(${Math.round(trimStart * fpsNum)}, ${Math.round(trimEnd * fpsNum)})`)
+  if (scale !== '原始') lines.push(`LanczosResize(${scale.replace('x', ', ')})`)
+  if (loop > 0) lines.push(`Loop(${loop})`)
+  else if (loop === -1) lines.push('Loop()')
+  lines.push('ConvertToRGB24()')
+  document.getElementById('avs-preview').textContent = lines.join('\n')
+}
+
+document.getElementById('fps-select').onchange = updatePreview
+document.getElementById('scale-select').onchange = updatePreview
+document.getElementById('loop-select').onchange = updatePreview
+document.getElementById('trim-start').onchange = updatePreview
+document.getElementById('trim-end').onchange = updatePreview
+
+// 页面加载时恢复上次保存的配置
+restoreConfig()
+
+// ---------- 生成 avs ----------
+async function generateAvs() {
+  if (!activeVideoPath) { alert(tt('请先完成前面的步骤|Finish the previous steps first')); return }
+  const fpsSel = document.getElementById('fps-select').value
+  const scale = document.getElementById('scale-select').value
+  const loop = Number(document.getElementById('loop-select').value)
+  const trimStart = Number(document.getElementById('trim-start').value || 0)
+  const trimEnd = Number(document.getElementById('trim-end').value || 0)
+  const bitness = mmdInfo ? mmdInfo.bitness : 32
+  const outputDir = document.getElementById('avs-outdir').value.trim() || undefined
+  const r = await api('/api/generate-avs', {
+    videoPath: activeVideoPath,
+    bitness,
+    fps: fpsSel === 'keep' ? (videoInfo ? Math.round(videoInfo.fps) : 30) : Number(fpsSel),
+    loop,
+    scale: scale === '原始' ? undefined : scale,
+    trimStartSec: trimEnd > trimStart ? trimStart : undefined,
+    trimEndSec: trimEnd > trimStart ? trimEnd : undefined,
+    outputDir,
+  })
+  const box = document.getElementById('gen-result')
+  if (!r.ok) {
+    box.innerHTML = `<div class="alert bad">${tt('保存失败：|Save failed: ')}${escapeHtml(r.error)}</div>`
+    return
+  }
+  box.innerHTML = `<div class="alert ok"><b>✓ ${tt('已生成（|Generated (')}${r.bitness || bitness}${tt(' 位 MMD 版本）！|-bit MMD)!')}</b><br>${tt('文件位置：|File location:')}<code>${escapeHtml(r.avsPath)}</code><br><br>` +
+    tt('现在打开 MMD → Background → Load background avi file → 文件类型选 <b>All Files</b> → 选择这个 .avs 文件即可。',
+       'Now open MMD → Background → Load background avi file → set file type to <b>All Files</b> → select this .avs file.') + '</div>'
+}
+
+function restartTool() {
+  mmdInfo = null; videoInfo = null; activeVideoPath = null
+  document.getElementById('video-path').value = ''
+  document.getElementById('mmd-result').innerHTML = ''
+  document.getElementById('video-result').innerHTML = ''
+  document.getElementById('fix-result').innerHTML = ''
+  document.getElementById('gen-result').innerHTML = ''
+  document.getElementById('to-step2').disabled = true
+  document.getElementById('to-step3').disabled = true
+  goStep(1)
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+}
+</script>
+</body>
+</html>
